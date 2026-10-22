@@ -5,7 +5,7 @@ import "./globals.css";
 const font = Bricolage_Grotesque({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Things Clock",
+  title: "Tinx Clock",
   description: "Track your shifts, hours and pay.",
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#5a2f17" };
