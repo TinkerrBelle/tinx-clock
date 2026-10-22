@@ -1,0 +1,56 @@
+:root {
+  --bg: #ffffff; --card: #faf6f2; --ink: #2a1a10; --muted: #7a655a; --line: #eadfd6;
+  --brown: #5a2f17; --burnt: #b6440c; --burnt-ink: #ffffff; --danger: #a3261a;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1a0f09; --card: #26170f; --ink: #f6ebe3; --muted: #b59d90; --line: #3b281c;
+    --brown: #3a2014; --burnt: #d9581a; --burnt-ink: #1a0f09; --danger: #ff8a7a; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font-size: 16px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 0; font-weight: 700; }
+p { margin: 0; }
+.top { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; background: var(--brown); color: #fff; }
+.brand { font-size: 1.1rem; letter-spacing: 0.01em; }
+.top .link { color: #f1d9c9; }
+.page { max-width: 560px; margin: 0 auto; padding: 20px 16px 100px; }
+.tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--bg);
+  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.tabs a { flex: 1; text-align: center; padding: 14px 0; color: var(--muted); text-decoration: none; font-weight: 600; }
+.tabs a.on { color: var(--burnt); box-shadow: inset 0 3px 0 var(--burnt); }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.between { justify-content: space-between; }
+.grow { flex: 1; min-width: 130px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.muted { color: var(--muted); } .small { font-size: 0.875rem; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; color: var(--muted); }
+input, select { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 12px; width: 100%; min-height: 48px; }
+input[type="radio"] { width: 22px; min-height: 22px; accent-color: var(--burnt); }
+:focus-visible { outline: 3px solid var(--burnt); outline-offset: 2px; }
+.btn { font: inherit; font-weight: 700; background: var(--burnt); color: var(--burnt-ink); border: 0; border-radius: 10px;
+  padding: 14px 20px; min-height: 52px; cursor: pointer; }
+.btn.small { min-height: 40px; padding: 8px 16px; }
+.btn:disabled { opacity: 0.5; }
+.btn.go, .btn.stop { min-height: 64px; font-size: 1.15rem; }
+.btn.stop { background: var(--brown); color: #fff; }
+.link { font: inherit; background: none; border: 0; padding: 8px 4px; color: var(--burnt); cursor: pointer; font-weight: 600; }
+.link.danger { color: var(--danger); }
+.timer { font-size: clamp(3rem, 18vw, 4.5rem); font-weight: 800; font-variant-numeric: tabular-nums; color: var(--burnt); line-height: 1; }
+.earned { font-size: 1.4rem; font-weight: 700; }
+.empty { text-align: center; color: var(--muted); padding: 40px 12px; }
+.note { color: var(--danger); font-size: 0.9rem; }
+.rate-row { display: grid; grid-template-columns: 24px 1fr 100px auto; gap: 8px; align-items: center; }
+.plain { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.chip { font: inherit; white-space: nowrap; background: var(--card); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 999px; padding: 8px 14px; cursor: pointer; }
+.chip.on { background: var(--burnt); color: var(--burnt-ink); border-color: var(--burnt); font-weight: 700; }
+.totals { display: grid; grid-template-columns: 1fr 1fr; background: var(--brown); color: #fff; border-radius: 10px; padding: 16px; gap: 12px; }
+.totals div { display: flex; flex-direction: column; } .totals strong { font-size: 1.5rem; } .totals .muted { color: #e3c9b8; }
+.auth { max-width: 380px; margin: 0 auto; padding: 14vh 20px 40px; display: flex; flex-direction: column; gap: 16px; }
+.auth h1 { color: var(--burnt); font-size: 2.2rem; }
+@media (prefers-reduced-motion: no-preference) { .btn { transition: transform 0.1s; } .btn:active { transform: scale(0.98); } }
