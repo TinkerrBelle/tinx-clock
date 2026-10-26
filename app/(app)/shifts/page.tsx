@@ -1,6 +1,10 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useUser } from "@/components/Shell";
+import ShiftForm, { Job, Values } from "@/components/ShiftForm";
+import Empty from "@/components/Empty";
+import Icon from "@/components/Icon";
 import { gbp, hoursBetween, fmtDur } from "@/lib/util";
 
 type Shift = { id: string; rate_name: string; hourly_rate: number; start_time: string; end_time: string; jobs: { name: string } | null };
@@ -29,12 +33,14 @@ function getRange(mode: Mode, from: string, to: string): [Date | null, Date | nu
 const modes: [Mode, string][] = [["week", "This week"], ["lastweek", "Last week"], ["month", "This month"], ["custom", "Custom"], ["all", "All"]];
 
 export default function Shifts() {
+  const user = useUser();
   const [mode, setMode] = useState<Mode>("week");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
-  const [rate, setRate] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [jobs, setJobs] = useState<Job[]>([]);
 
   const load = useCallback(async () => {
     const [a, b] = getRange(mode, from, to);
@@ -49,9 +55,26 @@ export default function Shifts() {
   const hours = shifts.reduce((t, s) => t + hoursBetween(s.start_time, s.end_time), 0);
   const total = shifts.reduce((t, s) => t + hoursBetween(s.start_time, s.end_time) * Number(s.hourly_rate), 0);
 
-  async function saveRate(id: string) {
-    const n = Number(rate);
-    if (!isNaN(n) && rate !== "") await supabase.from("shifts").update({ hourly_rate: n }).eq("id", id);
+  async function openAdd() {
+    const { data } = await supabase.from("jobs").select("id,name,pay_rates(id,name,hourly_rate,is_default)").order("name");
+    setJobs((data as any) ?? []);
+    setEditing(null);
+    setAdding(true);
+  }
+
+  async function addShift(v: Values) {
+    const { error } = await supabase.from("shifts").insert({
+      user_id: user.id, job_id: v.job_id, rate_name: v.rate_name ?? "Custom",
+      hourly_rate: v.hourly_rate, start_time: v.start_time, end_time: v.end_time,
+    });
+    if (error) return error.message;
+    setAdding(false);
+    load();
+  }
+
+  async function saveEdit(id: string, v: Values) {
+    const { error } = await supabase.from("shifts").update({ start_time: v.start_time, end_time: v.end_time, hourly_rate: v.hourly_rate }).eq("id", id);
+    if (error) return error.message;
     setEditing(null);
     load();
   }
@@ -67,7 +90,22 @@ export default function Shifts() {
 
   return (
     <section className="stack">
-      <h1>Shifts</h1>
+      <div className="row between">
+        <h1>Shifts</h1>
+        {!adding && <button className="btn small" onClick={openAdd}><Icon name="plus" size={18} /> Add shift</button>}
+      </div>
+
+      {adding && (
+        <div className="card">
+          <strong>Add a missed shift</strong>
+          {jobs.length ? (
+            <ShiftForm jobs={jobs} onSave={addShift} onCancel={() => setAdding(false)} />
+          ) : (
+            <Empty icon="briefcase" title="Add a job first" text="You need at least one job before you can add a shift." />
+          )}
+        </div>
+      )}
+
       <div className="chips">
         {modes.map(([m, label]) => (
           <button key={m} className={mode === m ? "chip on" : "chip"} onClick={() => setMode(m)}>{label}</button>
@@ -85,7 +123,9 @@ export default function Shifts() {
         <div><span className="muted small">Total earned</span><strong>{gbp(total)}</strong></div>
       </div>
 
-      {!shifts.length && <p className="empty">No finished shifts in this period.</p>}
+      {!shifts.length && (
+        <Empty icon="calendar" title="No shifts in this period" text="Finished shifts show up here. Forgot to clock in? Use Add shift." />
+      )}
       {shifts.map((s) => {
         const h = hoursBetween(s.start_time, s.end_time);
         return (
@@ -96,16 +136,12 @@ export default function Shifts() {
             </div>
             <p className="muted small">{day(s.start_time)} · {time(s.start_time)} to {time(s.end_time)} · {fmtDur(h)}</p>
             {editing === s.id ? (
-              <div className="row">
-                <input type="number" step="0.01" min="0" value={rate} onChange={(e) => setRate(e.target.value)} autoFocus />
-                <button className="btn small" onClick={() => saveRate(s.id)}>Save</button>
-                <button className="link" onClick={() => setEditing(null)}>Cancel</button>
-              </div>
+              <ShiftForm initial={s} onSave={(v) => saveEdit(s.id, v)} onCancel={() => setEditing(null)} />
             ) : (
               <div className="row between">
                 <span className="small">{s.rate_name}: {gbp(s.hourly_rate)}/hr</span>
                 <span className="row">
-                  <button className="link" onClick={() => { setEditing(s.id); setRate(String(s.hourly_rate)); }}>Edit wage</button>
+                  <button className="link" onClick={() => { setAdding(false); setEditing(s.id); }}>Edit</button>
                   <button className="link danger" onClick={() => remove(s.id)}>Delete</button>
                 </span>
               </div>

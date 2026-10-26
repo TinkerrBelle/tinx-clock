@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Empty from "@/components/Empty";
 import { supabase } from "@/lib/supabase";
 import { useUser } from "@/components/Shell";
 import { gbp } from "@/lib/util";
@@ -78,7 +79,7 @@ export default function Jobs() {
         </form>
       )}
 
-      {!jobs.length && !adding && <p className="empty">No jobs yet. Add one to start tracking shifts.</p>}
+      {!jobs.length && !adding && <Empty icon="briefcase" title="No jobs yet" text="Add your first job with its pay rates to start tracking shifts." />}
       {jobs.map((j) => (
         <div className="card" key={j.id}>
           <div className="row between">

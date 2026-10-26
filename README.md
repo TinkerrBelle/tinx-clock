@@ -1,4 +1,4 @@
-# Things Clock
+# Tinx
 
 Shift, hours and pay tracker. Next.js + Supabase.
 

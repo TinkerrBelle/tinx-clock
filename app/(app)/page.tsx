@@ -1,5 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import Empty from "@/components/Empty";
+import Icon from "@/components/Icon";
 import { supabase } from "@/lib/supabase";
 import { useUser } from "@/components/Shell";
 import { gbp, hoursBetween, fmtClock, getPosition } from "@/lib/util";
@@ -17,6 +20,7 @@ export default function Clock() {
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     const [j, s] = await Promise.all([
@@ -52,7 +56,7 @@ export default function Clock() {
       start_lat: pos?.coords.latitude ?? null, start_lng: pos?.coords.longitude ?? null,
     });
     setBusy(false);
-    if (error) alert(error.message); else load();
+    if (error) alert(error.message); else { setOpen(false); load(); }
   }
 
   async function stop() {
@@ -77,7 +81,7 @@ export default function Clock() {
   if (!loaded) return <p className="empty">Loading…</p>;
 
   if (active) {
-    const hrs = hoursBetween(active.start_time) ;
+    const hrs = hoursBetween(active.start_time);
     return (
       <section className="stack">
         <p className="muted">{active.jobs?.name} · {active.rate_name}</p>
@@ -92,27 +96,44 @@ export default function Clock() {
   }
 
   if (!jobs.length)
-    return <p className="empty">No jobs yet. Add your first job under Jobs, with its pay rates.</p>;
+    return (
+      <Empty icon="briefcase" title="No jobs yet" text="Add a job and its pay rates, then you can start tracking shifts.">
+        <Link href="/jobs" className="btn small">Add your first job</Link>
+      </Empty>
+    );
 
   const rates = jobs.find((j) => j.id === jobId)?.pay_rates ?? [];
   return (
-    <section className="stack">
-      <h1>Ready to start?</h1>
-      <label className="field">Job
-        <select value={jobId} onChange={(e) => pickJob(e.target.value)}>
-          <option value="">Choose a job</option>
-          {jobs.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
-        </select>
-      </label>
-      {jobId && (
-        <label className="field">Pay rate
-          <select value={rateId} onChange={(e) => setRateId(e.target.value)}>
-            {rates.map((r) => <option key={r.id} value={r.id}>{r.name} · {gbp(r.hourly_rate)}/hr</option>)}
-          </select>
-        </label>
+    <section className="power-wrap">
+      <button className={open ? "power small" : "power"} onClick={() => setOpen(!open)} aria-label={open ? "Close" : "Start a shift"} aria-expanded={open}>
+        <Icon name="power" size={open ? 40 : 68} />
+      </button>
+      {!open && (
+        <>
+          <h1>Ready to clock in?</h1>
+          <p className="muted">Tap the button to start a shift</p>
+        </>
       )}
-      <button className="btn go" onClick={start} disabled={busy || !rateId}>{busy ? "Starting…" : "Start shift"}</button>
-      <p className="muted small">Your location is saved when you start and stop, if you allow it.</p>
+      {open && (
+        <div className="card stack form-in">
+          <strong>Start a shift</strong>
+          <label className="field">Job
+            <select value={jobId} onChange={(e) => pickJob(e.target.value)}>
+              <option value="">Choose a job</option>
+              {jobs.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
+            </select>
+          </label>
+          {jobId && (
+            <label className="field">Pay rate
+              <select value={rateId} onChange={(e) => setRateId(e.target.value)}>
+                {rates.map((r) => <option key={r.id} value={r.id}>{r.name} · {gbp(r.hourly_rate)}/hr</option>)}
+              </select>
+            </label>
+          )}
+          <button className="btn go" onClick={start} disabled={busy || !rateId}>{busy ? "Starting…" : "Start shift"}</button>
+          <p className="muted small">Your location is saved when you start and stop, if you allow it.</p>
+        </div>
+      )}
     </section>
   );
 }

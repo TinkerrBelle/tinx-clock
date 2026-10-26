@@ -40,3 +40,10 @@ alter table shifts enable row level security;
 create policy "own jobs" on jobs for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "own rates" on pay_rates for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "own shifts" on shifts for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade default auth.uid(),
+  full_name text, gender text, date_of_birth date, phone text, avatar text,
+  updated_at timestamptz not null default now()
+);
+alter table profiles enable row level security;
+create policy "own profile" on profiles for all using (id = auth.uid()) with check (id = auth.uid());
