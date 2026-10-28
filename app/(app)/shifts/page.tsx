@@ -5,16 +5,10 @@ import { useUser } from "@/components/Shell";
 import ShiftForm, { Job, Values } from "@/components/ShiftForm";
 import Empty from "@/components/Empty";
 import Icon from "@/components/Icon";
-import { gbp, hoursBetween, fmtDur } from "@/lib/util";
+import { gbp, fmtDur, mondayOf, netHours } from "@/lib/util";
 
-type Shift = { id: string; rate_name: string; hourly_rate: number; start_time: string; end_time: string; jobs: { name: string } | null };
+type Shift = { id: string; job_id: string; rate_name: string; hourly_rate: number; break_minutes: number; start_time: string; end_time: string; jobs: { name: string } | null };
 type Mode = "week" | "lastweek" | "month" | "custom" | "all";
-
-const mondayOf = (d: Date) => {
-  const x = new Date(d); x.setHours(0, 0, 0, 0);
-  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
-  return x;
-};
 
 function getRange(mode: Mode, from: string, to: string): [Date | null, Date | null] {
   const now = new Date();
@@ -37,26 +31,34 @@ export default function Shifts() {
   const [mode, setMode] = useState<Mode>("week");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [jobFilter, setJobFilter] = useState("");
+  const [allJobs, setAllJobs] = useState<{ id: string; name: string; is_active: boolean }[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
+
+  useEffect(() => {
+    supabase.from("jobs").select("id,name,is_active").order("name").then(({ data }) => setAllJobs((data as any) ?? []));
+  }, []);
 
   const load = useCallback(async () => {
     const [a, b] = getRange(mode, from, to);
     let q = supabase.from("shifts").select("*, jobs(name)").not("end_time", "is", null).order("start_time", { ascending: false });
     if (a) q = q.gte("start_time", a.toISOString());
     if (b) q = q.lt("start_time", b.toISOString());
+    if (jobFilter) q = q.eq("job_id", jobFilter);
     const { data } = await q;
     setShifts((data as any) ?? []);
-  }, [mode, from, to]);
+  }, [mode, from, to, jobFilter]);
   useEffect(() => { load(); }, [load]);
 
-  const hours = shifts.reduce((t, s) => t + hoursBetween(s.start_time, s.end_time), 0);
-  const total = shifts.reduce((t, s) => t + hoursBetween(s.start_time, s.end_time) * Number(s.hourly_rate), 0);
+  const calc = netHours(shifts);
+  const hours = shifts.reduce((t, s) => t + (calc.get(s.id)?.net ?? 0), 0);
+  const total = shifts.reduce((t, s) => t + (calc.get(s.id)?.net ?? 0) * Number(s.hourly_rate), 0);
 
   async function openAdd() {
-    const { data } = await supabase.from("jobs").select("id,name,pay_rates(id,name,hourly_rate,is_default)").order("name");
+    const { data } = await supabase.from("jobs").select("id,name,break_enabled,break_minutes,pay_rates(id,name,hourly_rate,is_default)").eq("is_active", true).order("name");
     setJobs((data as any) ?? []);
     setEditing(null);
     setAdding(true);
@@ -65,7 +67,7 @@ export default function Shifts() {
   async function addShift(v: Values) {
     const { error } = await supabase.from("shifts").insert({
       user_id: user.id, job_id: v.job_id, rate_name: v.rate_name ?? "Custom",
-      hourly_rate: v.hourly_rate, start_time: v.start_time, end_time: v.end_time,
+      hourly_rate: v.hourly_rate, break_minutes: v.break_minutes, start_time: v.start_time, end_time: v.end_time,
     });
     if (error) return error.message;
     setAdding(false);
@@ -73,7 +75,9 @@ export default function Shifts() {
   }
 
   async function saveEdit(id: string, v: Values) {
-    const { error } = await supabase.from("shifts").update({ start_time: v.start_time, end_time: v.end_time, hourly_rate: v.hourly_rate }).eq("id", id);
+    const { error } = await supabase.from("shifts").update({
+      start_time: v.start_time, end_time: v.end_time, hourly_rate: v.hourly_rate, break_minutes: v.break_minutes,
+    }).eq("id", id);
     if (error) return error.message;
     setEditing(null);
     load();
@@ -101,7 +105,7 @@ export default function Shifts() {
           {jobs.length ? (
             <ShiftForm jobs={jobs} onSave={addShift} onCancel={() => setAdding(false)} />
           ) : (
-            <Empty icon="briefcase" title="Add a job first" text="You need at least one job before you can add a shift." />
+            <Empty icon="briefcase" title="No active jobs" text="Add or reactivate a job before adding a shift." />
           )}
         </div>
       )}
@@ -117,6 +121,14 @@ export default function Shifts() {
           <label className="field grow">To<input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
         </div>
       )}
+      {allJobs.length > 1 && (
+        <label className="field">Job
+          <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)}>
+            <option value="">All jobs</option>
+            {allJobs.map((j) => <option key={j.id} value={j.id}>{j.name}{j.is_active ? "" : " (inactive)"}</option>)}
+          </select>
+        </label>
+      )}
 
       <div className="totals">
         <div><span className="muted small">Hours worked</span><strong>{fmtDur(hours)}</strong></div>
@@ -124,22 +136,27 @@ export default function Shifts() {
       </div>
 
       {!shifts.length && (
-        <Empty icon="calendar" title="No shifts in this period" text="Finished shifts show up here. Forgot to clock in? Use Add shift." />
+        <Empty icon="calendar" title="No shifts found" text="Finished shifts show up here. Forgot to clock in? Use Add shift." />
       )}
       {shifts.map((s) => {
-        const h = hoursBetween(s.start_time, s.end_time);
+        const c = calc.get(s.id) ?? { gross: 0, ded: 0, net: 0 };
         return (
           <div className="card" key={s.id}>
             <div className="row between">
               <strong>{s.jobs?.name}</strong>
-              <strong>{gbp(h * Number(s.hourly_rate))}</strong>
+              <strong >{gbp(c.net * Number(s.hourly_rate))}</strong>
             </div>
-            <p className="muted small">{day(s.start_time)} · {time(s.start_time)} to {time(s.end_time)} · {fmtDur(h)}</p>
+            <div className="meta">
+              <span className="date">{day(s.start_time)}</span>
+              <span className="times">{time(s.start_time)} – {time(s.end_time)}</span>
+              <span className="pill">{fmtDur(c.net)}</span>
+              {c.ded > 0 && <span className="brk">−{Math.round(c.ded * 60)}m break</span>}
+            </div>
             {editing === s.id ? (
               <ShiftForm initial={s} onSave={(v) => saveEdit(s.id, v)} onCancel={() => setEditing(null)} />
             ) : (
               <div className="row between">
-                <span className="small">{s.rate_name}: {gbp(s.hourly_rate)}/hr</span>
+                <span className="small muted">{s.rate_name}: {gbp(s.hourly_rate)}/hr</span>
                 <span className="row">
                   <button className="link" onClick={() => { setAdding(false); setEditing(s.id); }}>Edit</button>
                   <button className="link danger" onClick={() => remove(s.id)}>Delete</button>

@@ -2,8 +2,8 @@
 import { useState } from "react";
 
 export type Rate = { id: string; name: string; hourly_rate: number; is_default: boolean };
-export type Job = { id: string; name: string; pay_rates: Rate[] };
-export type Values = { job_id?: string; rate_name?: string; hourly_rate: number; start_time: string; end_time: string };
+export type Job = { id: string; name: string; break_enabled?: boolean; break_minutes?: number; pay_rates: Rate[] };
+export type Values = { job_id?: string; rate_name?: string; hourly_rate: number; break_minutes: number; start_time: string; end_time: string };
 
 const toLocal = (d: Date) => {
   const x = new Date(d);
@@ -13,7 +13,7 @@ const toLocal = (d: Date) => {
 
 export default function ShiftForm({ jobs, initial, onSave, onCancel }: {
   jobs?: Job[];
-  initial?: { start_time: string; end_time: string; hourly_rate: number };
+  initial?: { start_time: string; end_time: string; hourly_rate: number; break_minutes?: number | null };
   onSave: (v: Values) => Promise<string | void>;
   onCancel: () => void;
 }) {
@@ -21,6 +21,7 @@ export default function ShiftForm({ jobs, initial, onSave, onCancel }: {
   const [jobId, setJobId] = useState("");
   const [rateId, setRateId] = useState("");
   const [rate, setRate] = useState(initial ? String(initial.hourly_rate) : "");
+  const [brk, setBrk] = useState(String(initial?.break_minutes ?? 0));
   const [start, setStart] = useState(toLocal(initial ? new Date(initial.start_time) : new Date()));
   const [end, setEnd] = useState(toLocal(initial ? new Date(initial.end_time) : new Date()));
   const [err, setErr] = useState("");
@@ -29,10 +30,12 @@ export default function ShiftForm({ jobs, initial, onSave, onCancel }: {
 
   function pickJob(id: string) {
     setJobId(id);
-    const r = jobs?.find((j) => j.id === id)?.pay_rates ?? [];
+    const job = jobs?.find((j) => j.id === id);
+    const r = job?.pay_rates ?? [];
     const d = r.find((x) => x.is_default) ?? r[0];
     setRateId(d?.id ?? "");
     setRate(d ? String(d.hourly_rate) : "");
+    setBrk(String(job?.break_enabled ? job.break_minutes ?? 0 : 0));
   }
   function pickRate(id: string) {
     setRateId(id);
@@ -53,6 +56,7 @@ export default function ShiftForm({ jobs, initial, onSave, onCancel }: {
       job_id: jobId || undefined,
       rate_name: rates.find((x) => x.id === rateId)?.name,
       hourly_rate: Number(rate),
+      break_minutes: Math.max(0, Math.round(Number(brk) || 0)),
       start_time: s.toISOString(),
       end_time: f.toISOString(),
     });
@@ -82,6 +86,10 @@ export default function ShiftForm({ jobs, initial, onSave, onCancel }: {
       <label className="field">Start<input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required /></label>
       <label className="field">End<input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} required /></label>
       <label className="field">Hourly rate (£)<input type="number" step="0.01" min="0" value={rate} onChange={(e) => setRate(e.target.value)} required /></label>
+      <label className="field">Break (minutes)
+        <input type="number" min="0" step="1" value={brk} onChange={(e) => setBrk(e.target.value)} />
+        <span className="small">Taken off once per day for each job. Use 0 for no break.</span>
+      </label>
       {err && <p className="note">{err}</p>}
       <div className="row">
         <button className="btn small" disabled={busy}>{busy ? "Saving…" : adding ? "Add shift" : "Save changes"}</button>

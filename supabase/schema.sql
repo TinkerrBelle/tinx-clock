@@ -47,3 +47,8 @@ create table if not exists profiles (
 );
 alter table profiles enable row level security;
 create policy "own profile" on profiles for all using (id = auth.uid()) with check (id = auth.uid());
+
+alter table jobs add column if not exists is_active boolean not null default true;
+alter table jobs add column if not exists break_enabled boolean not null default false;
+alter table jobs add column if not exists break_minutes integer not null default 0;
+alter table shifts add column if not exists break_minutes integer not null default 0;

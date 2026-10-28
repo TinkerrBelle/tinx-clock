@@ -5,10 +5,11 @@ import Empty from "@/components/Empty";
 import Icon from "@/components/Icon";
 import { supabase } from "@/lib/supabase";
 import { useUser } from "@/components/Shell";
-import { gbp, hoursBetween, fmtClock, getPosition } from "@/lib/util";
+import { gbp, hoursBetween, fmtClock, fmtDur, getPosition, mondayOf, netHours } from "@/lib/util";
 
 type Rate = { id: string; name: string; hourly_rate: number; is_default: boolean };
-type Job = { id: string; name: string; pay_rates: Rate[] };
+type Job = { id: string; name: string; break_enabled: boolean; break_minutes: number; pay_rates: Rate[] };
+type Week = { id: string; job_id: string; start_time: string; end_time: string; break_minutes: number };
 type Shift = { id: string; hourly_rate: number; rate_name: string; start_time: string; jobs: { name: string } | null };
 
 export default function Clock() {
@@ -21,12 +22,15 @@ export default function Clock() {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
+  const [week, setWeek] = useState<Week[]>([]);
 
   const load = useCallback(async () => {
-    const [j, s] = await Promise.all([
-      supabase.from("jobs").select("id,name,pay_rates(id,name,hourly_rate,is_default)").order("name"),
+    const [j, s, w] = await Promise.all([
+      supabase.from("jobs").select("id,name,break_enabled,break_minutes,pay_rates(id,name,hourly_rate,is_default)").eq("is_active", true).order("name"),
       supabase.from("shifts").select("*, jobs(name)").is("end_time", null).maybeSingle(),
+      supabase.from("shifts").select("id,job_id,start_time,end_time,break_minutes").not("end_time", "is", null).gte("start_time", mondayOf(new Date()).toISOString()),
     ]);
+    setWeek((w.data as any) ?? []);
     setJobs((j.data as any) ?? []);
     setActive((s.data as any) ?? null);
     setLoaded(true);
@@ -46,12 +50,14 @@ export default function Clock() {
   }
 
   async function start() {
-    const rate = jobs.find((j) => j.id === jobId)?.pay_rates.find((r) => r.id === rateId);
-    if (!rate) return;
+    const job = jobs.find((j) => j.id === jobId);
+    const rate = job?.pay_rates.find((r) => r.id === rateId);
+    if (!job || !rate) return;
     setBusy(true);
     const pos = await getPosition();
     const { error } = await supabase.from("shifts").insert({
       user_id: user.id, job_id: jobId, rate_name: rate.name, hourly_rate: rate.hourly_rate,
+      break_minutes: job.break_enabled ? job.break_minutes : 0,
       start_time: new Date().toISOString(),
       start_lat: pos?.coords.latitude ?? null, start_lng: pos?.coords.longitude ?? null,
     });
@@ -102,7 +108,10 @@ export default function Clock() {
       </Empty>
     );
 
-  const rates = jobs.find((j) => j.id === jobId)?.pay_rates ?? [];
+  const selected = jobs.find((j) => j.id === jobId);
+  const rates = selected?.pay_rates ?? [];
+  const calc = netHours(week);
+  const sum = (filter: (s: Week) => boolean) => week.filter(filter).reduce((t, s) => t + (calc.get(s.id)?.net ?? 0), 0);
   return (
     <section className="power-wrap">
       <button className={open ? "power small" : "power"} onClick={() => setOpen(!open)} aria-label={open ? "Close" : "Start a shift"} aria-expanded={open}>
@@ -123,6 +132,13 @@ export default function Clock() {
               {jobs.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
             </select>
           </label>
+          {selected && (
+            <div className="week">
+              <span className="muted small">This week at {selected.name}</span>
+              <strong>{fmtDur(sum((s) => s.job_id === selected.id))}</strong>
+              {jobs.length > 1 && <span className="muted small">All jobs: {fmtDur(sum(() => true))}</span>}
+            </div>
+          )}
           {jobId && (
             <label className="field">Pay rate
               <select value={rateId} onChange={(e) => setRateId(e.target.value)}>
